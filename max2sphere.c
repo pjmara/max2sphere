@@ -60,6 +60,8 @@ int main(int argc,char **argv)
          params.nstop = atoi(argv[i+1]);
       } else if (strcmp(argv[i],"-d") == 0) {
          params.debug = TRUE;
+      } else if (strcmp(argv[i],"-t") == 0) {
+         strcpy(params.tablename,argv[i+1]);
       }
    }
 
@@ -97,7 +99,11 @@ int main(int argc,char **argv)
    // Does a table exist? If it does load it, if not create it and save it
 	ntable = params.outheight * params.outwidth * params.antialias * params.antialias;
 	lltable = malloc(ntable*sizeof(LLTABLE));
-	sprintf(tablename,"%d_%d_%d_%d.data",whichtemplate,params.outwidth,params.outheight,params.antialias);
+	if (params.tablename[0] != '\0') {
+		strcpy(tablename,params.tablename);
+	} else {
+		sprintf(tablename,"%d_%d_%d_%d.data",whichtemplate,params.outwidth,params.outheight,params.antialias);
+	}
 	if ((fptr = fopen(tablename,"r")) != NULL) {
 		if (params.debug)
 			fprintf(stderr,"%s() - Reading lookup table\n",argv[0]);
@@ -580,6 +586,7 @@ void Init(void)
 	params.nstart = 0;
 	params.nstop = 100000;
 	params.outfilename[0] = '\0';
+	params.tablename[0] = '\0';
    params.debug = FALSE;
 
    // Parameters for the 6 cube planes, ax + by + cz + d = 0
@@ -673,6 +680,7 @@ void GiveUsage(char *s)
 	fprintf(stderr,"   -n n      Start index for the sequence, default: %d\n",params.nstart);
    fprintf(stderr,"   -m n      End index for the sequence, default: %d\n",params.nstop);
    fprintf(stderr,"   -d        Enable debug mode, default: off\n");
+   fprintf(stderr,"   -t s      Path to lookup table file, default: auto-named in current directory\n");
    exit(-1);
 }
 
