@@ -33,6 +33,7 @@ typedef struct {
 	int nstart,nstop;
    PLANE faces[6];
 	char outfilename[256];
+	char tablename[512];
    int debug;
 } PARAMS;
 
