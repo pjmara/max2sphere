@@ -3,6 +3,9 @@
 #include <string.h>
 #include <math.h>
 #include <sys/time.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "bitmaplib.h"
 
 #define LEFT   0
@@ -35,6 +38,7 @@ typedef struct {
 	char outfilename[256];
 	char tablename[512];
    int debug;
+	int nthreads;
 } PARAMS;
 
 typedef struct {
