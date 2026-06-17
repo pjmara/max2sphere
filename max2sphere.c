@@ -22,7 +22,6 @@ typedef struct {
 } LLTABLE;
 LLTABLE *lltable = NULL;
 int ntable = 0;
-int itable = 0;
 
 int main(int argc,char **argv)
 {
@@ -62,6 +61,8 @@ int main(int argc,char **argv)
          params.debug = TRUE;
       } else if (strcmp(argv[i],"-t") == 0) {
          strcpy(params.tablename,argv[i+1]);
+      } else if (strcmp(argv[i],"-j") == 0) {
+         params.nthreads = MAX(1,atoi(argv[i+1]));
       }
    }
 
@@ -117,10 +118,17 @@ int main(int argc,char **argv)
          fprintf(stderr,"%s() - Generating lookup table\n",argv[0]);
    	dx = params.antialias * params.outwidth;
    	dy = params.antialias * params.outheight;
-		itable = 0;
+#ifdef _OPENMP
+		if (params.nthreads > 0)
+			omp_set_num_threads(params.nthreads);
+#pragma omp parallel for schedule(static) private(i,x0,aj,ai,x,y,longitude,latitude)
+#endif
    	for (j=0;j<params.outheight;j++) {
+			int rowbase = j * params.outwidth * params.antialias2;
    	   y0 = j / (double)params.outheight;
    	   for (i=0;i<params.outwidth;i++) {
+				int pixbase = rowbase + i * params.antialias2;
+				int idx = pixbase;
    	      x0 = i / (double)params.outwidth;
    	      for (aj=0;aj<params.antialias;aj++) {
    	         y = y0 + aj / dy; // 0 ... 1
@@ -128,8 +136,8 @@ int main(int argc,char **argv)
    	            x = x0 + ai / dx; // 0 ... 1
    	            longitude = x * TWOPI - M_PI;    // -pi ... pi
    	            latitude = y * M_PI - M_PI/2;    // -pi/2 ... pi/2
-						lltable[itable].face = FindFaceUV(longitude,latitude,&(lltable[itable].uv));
-						itable++;
+						lltable[idx].face = FindFaceUV(longitude,latitude,&(lltable[idx].uv));
+						idx++;
 					}
 				}
 			}
@@ -157,46 +165,33 @@ int main(int argc,char **argv)
 	   if (!ReadFrame(frame2,fname2,params.framewidth,params.frameheight))
 	      exit(-1);
 
-	   starttime = GetRunTime(); 
-		itable = 0;
+	   starttime = GetRunTime();
+#ifdef _OPENMP
+		if (params.nthreads > 0)
+			omp_set_num_threads(params.nthreads);
+#pragma omp parallel for schedule(static) private(i,index,face,aj,ai,csum,c,uv)
+#endif
 	   for (j=0;j<params.outheight;j++) {
-	      //y0 = j / (double)params.outheight;
-	      //if (params.debug && j % (params.outheight/32) == 0)
-	        //fprintf(stderr,"%s() - Scan line %d\n",argv[0],j);
-	
+			int rowbase = j * params.outwidth * params.antialias2;
 	      for (i=0;i<params.outwidth;i++) {
-	         //x0 = i / (double)params.outwidth;
-	         csum = czero; // Supersampling antialising sum
-	
-				// Antialiasing loops
+				int pixbase = rowbase + i * params.antialias2;
+				int idx = pixbase;
+	         csum = czero;
 	         for (aj=0;aj<params.antialias;aj++) {
-	            //y = y0 + aj / dy; // 0 ... 1
-	
-	         	// Antialiasing loops
 	         	for (ai=0;ai<params.antialias;ai++) {
-	            	//x = x0 + ai / dx; // 0 ... 1
-	
-	               // Calculate latitude and longitude
-	               //longitude = x * TWOPI - M_PI;    // -pi ... pi
-						//latitude = y * M_PI - M_PI/2;    // -pi/2 ... pi/2
-	               face = lltable[itable].face;
-	               uv = lltable[itable].uv;
-						itable++;
-	
-	               // Sum over the supersampling set 
+	               face = lltable[idx].face;
+	               uv = lltable[idx].uv;
+						idx++;
 						c = GetColour(face,uv,frame1,frame2);
 						csum.r += c.r;
    	            csum.g += c.g;
    	            csum.b += c.b;
    	         }
    	      }
-	
-	         // Finally update the spherical image
-	         index = j * params.outwidth + i; 
+	         index = j * params.outwidth + i;
 	         spherical[index].r = csum.r / params.antialias2;
 	         spherical[index].g = csum.g / params.antialias2;
 	         spherical[index].b = csum.b / params.antialias2;
-	
 	      }
 	   }
    	if (params.debug)
@@ -588,6 +583,7 @@ void Init(void)
 	params.outfilename[0] = '\0';
 	params.tablename[0] = '\0';
    params.debug = FALSE;
+	params.nthreads = 0;
 
    // Parameters for the 6 cube planes, ax + by + cz + d = 0
    params.faces[LEFT].a   = -1;
@@ -681,6 +677,7 @@ void GiveUsage(char *s)
    fprintf(stderr,"   -m n      End index for the sequence, default: %d\n",params.nstop);
    fprintf(stderr,"   -d        Enable debug mode, default: off\n");
    fprintf(stderr,"   -t s      Path to lookup table file, default: auto-named in current directory\n");
+   fprintf(stderr,"   -j n      Number of threads for remap, default: OpenMP default (all cores)\n");
    exit(-1);
 }
 
